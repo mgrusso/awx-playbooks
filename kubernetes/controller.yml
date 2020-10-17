@@ -1,0 +1,15 @@
+---
+- name: Configure the kubecontrollers
+  hosts: controllers
+  tasks: 
+    - name: Additional firewall configuration of the controller node
+      firewalld:
+        port: "{{ item }}"
+        state: enabled
+        permanent: true
+        immediate: true
+      loop:
+        - 6443/tcp
+        - 2379-2380/tcp
+        - 10250/tcp
+        - 10252/tcp
