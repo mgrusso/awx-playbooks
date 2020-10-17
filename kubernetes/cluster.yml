@@ -1,0 +1,102 @@
+---
+- name: Deploy a kubernetes cluster
+  hosts: cluster
+  tasks:
+
+    - name: Ensure hostnames are state
+      hostname:
+        name: "{{ ansible_hostname }}"
+
+    - name: Ensure all packages are up to date
+      yum:
+        name: '*'
+        state: latest
+      notify: reboot hosts
+
+    - name: Swap partitions are disabled
+      lineinfile:
+        path: /etc/fstab
+        regexp: " swap "
+        state: absent
+      notify: reboot hosts
+
+    - name: Ensure RPM keys are present
+      rpm_key:
+        key: "{{ item }}"
+        state: present
+      loop:
+        - https://packages.cloud.google.com/yum/doc/yum-key.gpg 
+        - https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+        - https://download.docker.com/linux/centos/gpg
+
+    - name: Repositories are configured
+      yum_repository:
+        name: "{{ item.name }}"
+        description: "{{ item.descr }}"
+        baseurl: "{{ item.baseurl }}"
+      loop:
+        - name: docker 
+          descr: Docker CE repo 
+          baseurl: https://download.docker.com/linux/centos/7/$basearch/stable
+        - name: kubernetes
+          descr: Kubernetes repo
+          baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+          
+    - name: Ensure Docker CE and kubernetes is installed
+      yum:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+        - kubelet 
+        - kubeadm
+        - kubectl
+      notify: restart services
+
+    - name: /etc/hosts is correct
+      copy:
+        src: hosts.tpl
+        dest: /etc/hosts
+        owner: root 
+        group: root 
+        mode: '0644'
+
+    - name: Ensure SELinux is set to enforcing mode
+      lineinfile:
+        path: /etc/selinux/config
+        regexp: '^SELINUX='
+        line: SELINUX=enforcing
+
+    - name: Docker CE and kubelet are started
+      service:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      loop:
+        - docker
+        - kubelet
+
+    - name: Firewall configuration
+      firewalld:
+        port: "{{ item }}"
+        state: enabled
+        permanent: true
+        immediate: true
+      loop:
+        - 10251/tcp
+        - 10255/tcp
+
+
+  handlers:
+    - name: reboot hosts
+      reboot:
+    
+    - name: restart services
+      service:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - docker
+        - kubelet 
