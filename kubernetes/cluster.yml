@@ -3,10 +3,21 @@
   hosts: cluster
   tasks:
 
-    - name: Ensure hostnames are state
+    - name: Ensure hostnames are set
       hostname:
         name: "{{ ansible_hostname }}"
 
+    - name: Make sure chrony is installed
+      yum:
+        name: chrony
+        state: present
+
+    - name: Ensure chrony is up and running
+      service:
+        name: chronyd
+        state: started
+        enabled: true
+        
     - name: Ensure all packages are up to date
       yum:
         name: '*'
